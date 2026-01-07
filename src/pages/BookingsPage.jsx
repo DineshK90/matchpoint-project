@@ -14,20 +14,26 @@ export default function BookingsPage() {
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  const loadEvents = useCallback(async () => {
-    if (!user) return;
+  const loadEvents = useCallback(async (currentUser) => {
+    if (!currentUser) return;
 
     setLoading(true);
 
     try {
-      const data = await getMyEvents(user.uid);
+      const data = await getMyEvents(currentUser);
       setEvents(data);
 
       const map = {};
       for (const event of data) {
-        if (event.user_id === user.uid || user.role === "admin") {
+        if (
+          event.user_id === currentUser.uid ||
+          currentUser.role === "admin"
+        ) {
           try {
-            map[event.id] = await getParticipants(event.id, user.uid);
+            map[event.id] = await getParticipants(
+              event.id,
+              currentUser.uid
+            );
           } catch {
             map[event.id] = [];
           }
@@ -39,18 +45,23 @@ export default function BookingsPage() {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, []);
 
   useEffect(() => {
-    loadEvents();
-  }, [loadEvents]);
+    if (user) {
+      loadEvents(user);
+    }
+  }, [user, loadEvents]);
 
   return (
     <Container className="py-5 text-light">
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h2>My Events</h2>
 
-        <Button variant="info" onClick={() => setShowForm((v) => !v)}>
+        <Button
+          variant="info"
+          onClick={() => setShowForm((v) => !v)}
+        >
           {showForm ? "Close" : "Create Event"}
         </Button>
       </div>
@@ -60,7 +71,7 @@ export default function BookingsPage() {
           userId={user.uid}
           onSuccess={() => {
             setShowForm(false);
-            loadEvents();
+            loadEvents(user);
           }}
         />
       )}
@@ -115,9 +126,13 @@ export default function BookingsPage() {
 
               {participants.length > 0 && (
                 <div className="mt-2">
-                  <small className="text-secondary">Participants:</small>
+                  <small className="text-secondary">
+                    Participants:
+                  </small>
                   <div className="text-secondary">
-                    {participants.map((p) => `@${p.username}`).join(", ")}
+                    {participants
+                      .map((p) => `@${p.username}`)
+                      .join(", ")}
                   </div>
                 </div>
               )}
