@@ -31,7 +31,6 @@ export default function Hero() {
           built for organizers and communities.
         </p>
 
-        {/* FEATURE CARDS */}
         <div className="hero-feature-cards">
           <div className="hero-image-card">
             <img src={eventsImg} alt="Events" />
@@ -55,7 +54,6 @@ export default function Hero() {
           </div>
         </div>
 
-        {/* CTA */}
         <button className="hero-cta-game" onClick={scrollToContent}>
           ENTER ARENA
         </button>

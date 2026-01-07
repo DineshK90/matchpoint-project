@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Container, Button, Badge } from "react-bootstrap";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
@@ -26,9 +26,11 @@ export default function EventDetailPage() {
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(true);
 
- 
+  const isOwner = user && event?.user_id === user.uid;
+  const isAdmin = user?.role === "admin";
+  const canManage = isOwner || isAdmin;
 
-  async function loadEvent() {
+  const loadEvent = useCallback(async () => {
     try {
       const data = await getEventById(id);
       setEvent(data);
@@ -37,13 +39,10 @@ export default function EventDetailPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [id, navigate]);
 
- 
-
-  async function loadJoinStatus() {
-    if (!user || !event) return;
-    if (event.user_id === user.uid) return; 
+  const loadJoinStatus = useCallback(async () => {
+    if (!user || !event || isOwner) return;
 
     try {
       const status = await getJoinStatus(event.id, user.uid);
@@ -51,47 +50,43 @@ export default function EventDetailPage() {
     } catch {
       setJoinStatus(null);
     }
-  }
+  }, [user, event, isOwner]);
 
+  const loadRequests = useCallback(async () => {
+    if (!user || !canManage || !event) return;
 
-
-  async function loadRequests() {
-    if (!user) return;
     try {
       const data = await getJoinRequests(event.id, user.uid);
       setRequests(data);
-    } catch {}
-  }
+    } catch (err) {
+      console.warn("Join requests unavailable", err.message);
+      setRequests([]);
+    }
+  }, [user, canManage, event]);
 
-  async function loadParticipants() {
-    if (!user) return;
+  const loadParticipants = useCallback(async () => {
+    if (!user || !canManage || !event) return;
+
     try {
       const data = await getParticipants(event.id, user.uid);
       setParticipants(data);
-    } catch {}
-  }
-
-
+    } catch (err) {
+      console.warn("Participants unavailable", err.message);
+      setParticipants([]);
+    }
+  }, [user, canManage, event]);
 
   useEffect(() => {
     loadEvent();
-  }, [id]);
+  }, [loadEvent]);
 
   useEffect(() => {
     if (!event || !user) return;
 
-const isOwner = user && event.user_id === user.uid;
-    const isAdmin = user.role === "admin";
-
-    if (!isOwner) {
-      loadJoinStatus();
-    }
-
-    if (isOwner || isAdmin) {
-      loadRequests();
-      loadParticipants();
-    }
-  }, [event, user]);
+    loadJoinStatus();
+    loadRequests();
+    loadParticipants();
+  }, [event, user, loadJoinStatus, loadRequests, loadParticipants]);
 
   if (loading) {
     return (
@@ -102,12 +97,6 @@ const isOwner = user && event.user_id === user.uid;
   }
 
   if (!event) return null;
-
-  const isOwner = user && event.user_id === user.uid;
-  const isAdmin = user?.role === "admin";
-  const canManage = isOwner || isAdmin;
-
-
 
   return (
     <Container className="py-5 text-light">
@@ -125,6 +114,16 @@ const isOwner = user && event.user_id === user.uid;
         />
       )}
 
+      {editing && (
+        <BookingForm
+          event={event}
+          onSuccess={() => {
+            setEditing(false);
+            loadEvent();
+          }}
+        />
+      )}
+
       <h2 className="mb-2">{event.title}</h2>
 
       <p className="text-secondary mb-1">
@@ -137,42 +136,29 @@ const isOwner = user && event.user_id === user.uid;
 
       <p className="mt-3">{event.description}</p>
 
-     
-
       <div className="mt-4 d-flex gap-2 flex-wrap">
-
         {canManage && (
-  <>
-    <Button
-      variant="secondary"
-      onClick={() => setEditing((v) => !v)}
-    >
-      {editing ? "Cancel Edit" : "Edit Event"}
-    </Button>
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => setEditing((v) => !v)}
+            >
+              {editing ? "Cancel Edit" : "Edit Event"}
+            </Button>
 
-    <Button
-      variant="danger"
-      onClick={async () => {
-        if (confirm("Delete this event?")) {
-          await deleteEvent(event.id);
-          navigate("/events");
-        }
-      }}
-    >
-      Delete Event
-    </Button>
-  </>
-)}
-
-{editing && (
-  <BookingForm
-    event={event}
-    onSuccess={() => {
-      setEditing(false);
-      loadEvent();
-    }}
-  />
-)}
+            <Button
+              variant="danger"
+              onClick={async () => {
+                if (confirm("Delete this event?")) {
+                  await deleteEvent(event.id);
+                  navigate("/events");
+                }
+              }}
+            >
+              Delete Event
+            </Button>
+          </>
+        )}
 
         {user && !isOwner && event.is_public && joinStatus !== "joined" && (
           <Button onClick={() => joinPublicEvent(event.id, user.uid)}>
@@ -204,8 +190,6 @@ const isOwner = user && event.user_id === user.uid;
         )}
       </div>
 
-     
-
       {canManage && requests.length > 0 && (
         <div className="mt-5">
           <h5>Join Requests</h5>
@@ -217,23 +201,20 @@ const isOwner = user && event.user_id === user.uid;
             >
               <span>@{r.username}</span>
 
-             <Button
-  size="sm"
-  onClick={async () => {
-    await approveJoin(event.id, r.id, user.uid);
-    await loadRequests();
-    await loadParticipants();
-  }}
->
-  Approve
-</Button>
-
+              <Button
+                size="sm"
+                onClick={async () => {
+                  await approveJoin(event.id, r.id, user.uid);
+                  loadRequests();
+                  loadParticipants();
+                }}
+              >
+                Approve
+              </Button>
             </div>
           ))}
         </div>
       )}
-
-    
 
       {canManage && participants.length > 0 && (
         <div className="mt-5">

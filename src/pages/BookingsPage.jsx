@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Container, Button, Badge } from "react-bootstrap";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
@@ -14,12 +14,13 @@ export default function BookingsPage() {
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  async function loadEvents() {
+  const loadEvents = useCallback(async () => {
     if (!user) return;
 
     setLoading(true);
+
     try {
-      const data = await getMyEvents(user);
+      const data = await getMyEvents(user.uid);
       setEvents(data);
 
       const map = {};
@@ -38,11 +39,11 @@ export default function BookingsPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [user]);
 
   useEffect(() => {
     loadEvents();
-  }, [user]);
+  }, [loadEvents]);
 
   return (
     <Container className="py-5 text-light">
